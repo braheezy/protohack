@@ -1,0 +1,22 @@
+[Sun Oct  5 06:22:51 2025 UTC] [main.test] NOTE:check starts
+[Sun Oct  5 06:22:51 2025 UTC] [main.test] NOTE:connected to 34.204.18.159 port 3000
+[Sun Oct  5 06:22:51 2025 UTC] [main.test] NOTE:passed content.0
+[Sun Oct  5 06:22:51 2025 UTC] [main.test] NOTE:connected to 34.204.18.159 port 3000
+[Sun Oct  5 06:22:51 2025 UTC] [main.test] NOTE:passed content.1
+[Sun Oct  5 06:22:51 2025 UTC] [main.test] NOTE:connected to 34.204.18.159 port 3000
+[Sun Oct  5 06:22:51 2025 UTC] [main.test] NOTE:passed content.2
+[Sun Oct  5 06:22:52 2025 UTC] [main.test] NOTE:connected to 34.204.18.159 port 3000
+[Sun Oct  5 06:22:52 2025 UTC] [main.test] NOTE:passed content.3
+[Sun Oct  5 06:22:52 2025 UTC] [main.test] PASS
+[Sun Oct  5 06:22:53 2025 UTC] [multiclient.test] NOTE:check starts
+[Sun Oct  5 06:22:53 2025 UTC] [multiclient.test] NOTE:connected to 34.204.18.159 port 3000
+[Sun Oct  5 06:22:53 2025 UTC] [multiclient.test] NOTE:connected to 34.204.18.159 port 3000
+[Sun Oct  5 06:22:53 2025 UTC] [multiclient.test] NOTE:connected to 34.204.18.159 port 3000
+[Sun Oct  5 06:22:53 2025 UTC] [multiclient.test] NOTE:connected to 34.204.18.159 port 3000
+[Sun Oct  5 06:22:53 2025 UTC] [multiclient.test] NOTE:connected to 34.204.18.159 port 3000
+[Sun Oct  5 06:22:53 2025 UTC] [multiclient.test] NOTE:passed connection 0
+[Sun Oct  5 06:22:53 2025 UTC] [multiclient.test] NOTE:passed connection 1
+[Sun Oct  5 06:22:53 2025 UTC] [multiclient.test] NOTE:passed connection 2
+[Sun Oct  5 06:22:53 2025 UTC] [multiclient.test] NOTE:passed connection 3
+[Sun Oct  5 06:22:53 2025 UTC] [multiclient.test] NOTE:passed connection 4
+[Sun Oct  5 06:22:53 2025 UTC] [multiclient.test] PASS

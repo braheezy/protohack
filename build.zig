@@ -1,0 +1,213 @@
+const std = @import("std");
+
+// ============================================================================
+// Protohackers Multi-Server Build Configuration
+// ============================================================================
+// To add a new server, just call addServer() with the server name and port.
+// This will create all the build steps automatically:
+//   zig build {name}        - Build and run locally
+//   zig build {name}-linux  - Cross-compile for Linux
+//   zig build {name}-deploy - Deploy to server
+//   zig build {name}-run    - Deploy and run
+//   zig build {name}-stop   - Stop the server
+//   zig build {name}-status - Check server status
+//   zig build {name}-logs   - View server logs
+
+pub fn build(b: *std.Build) void {
+    // Add servers here - each call creates all build steps
+    addServer(b, "smoke", 3000);
+    // addServer(b, "prime-time", 3001);
+    // addServer(b, "means-to-end", 3002);
+}
+
+// ============================================================================
+// Server Build Configuration
+// ============================================================================
+
+const ServerConfig = struct {
+    name: []const u8,
+    port: u16,
+};
+
+/// Add all build steps for a server
+fn addServer(b: *std.Build, name: []const u8, port: u16) void {
+    const config = ServerConfig{ .name = name, .port = port };
+
+    // Allocate stable strings for step names
+    const step_linux = std.fmt.allocPrint(b.allocator, "{s}-linux", .{name}) catch @panic("OOM");
+    const step_deploy = std.fmt.allocPrint(b.allocator, "{s}-deploy", .{name}) catch @panic("OOM");
+    const step_run = std.fmt.allocPrint(b.allocator, "{s}-run", .{name}) catch @panic("OOM");
+    const step_stop = std.fmt.allocPrint(b.allocator, "{s}-stop", .{name}) catch @panic("OOM");
+    const step_status = std.fmt.allocPrint(b.allocator, "{s}-status", .{name}) catch @panic("OOM");
+    const step_logs = std.fmt.allocPrint(b.allocator, "{s}-logs", .{name}) catch @panic("OOM");
+
+    const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
+
+    // Create the server framework module (shared by all servers)
+    const server_module = b.createModule(.{
+        .root_source_file = b.path("src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    // Add xev dependency
+    const xev_dep = b.dependency("libxev", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    server_module.addImport("xev", xev_dep.module("xev"));
+
+    // ========================================================================
+    // Local build and run
+    // ========================================================================
+    const exe = b.addExecutable(.{
+        .name = config.name,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path(b.fmt("servers/{s}/main.zig", .{config.name})),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    exe.root_module.addImport("server", server_module);
+
+    b.installArtifact(exe);
+
+    const run_step = b.step(config.name, b.fmt("Build and run {s} server locally", .{config.name}));
+    const run_cmd = b.addRunArtifact(exe);
+    run_cmd.step.dependOn(b.getInstallStep());
+    if (b.args) |args| {
+        run_cmd.addArgs(args);
+    }
+    run_step.dependOn(&run_cmd.step);
+
+    // ========================================================================
+    // Linux cross-compilation
+    // ========================================================================
+    const linux_target = b.resolveTargetQuery(.{
+        .cpu_arch = .x86_64,
+        .os_tag = .linux,
+        .abi = .gnu,
+    });
+
+    const server_module_linux = b.createModule(.{
+        .root_source_file = b.path("src/root.zig"),
+        .target = linux_target,
+        .optimize = .ReleaseFast,
+    });
+
+    const xev_linux = b.dependency("libxev", .{
+        .target = linux_target,
+        .optimize = .ReleaseFast,
+    });
+    server_module_linux.addImport("xev", xev_linux.module("xev"));
+
+    const linux_exe = b.addExecutable(.{
+        .name = config.name,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path(b.fmt("servers/{s}/main.zig", .{config.name})),
+            .target = linux_target,
+            .optimize = .ReleaseFast,
+        }),
+    });
+    linux_exe.root_module.addImport("server", server_module_linux);
+
+    const install_linux = b.addInstallArtifact(linux_exe, .{
+        .dest_dir = .{ .override = .{ .custom = b.fmt("linux/{s}", .{config.name}) } },
+    });
+
+    const linux_step = b.step(
+        step_linux,
+        b.fmt("Build {s} for Linux x86_64", .{config.name}),
+    );
+    linux_step.dependOn(&install_linux.step);
+
+    // ========================================================================
+    // Deploy to server
+    // ========================================================================
+    const deploy_step = b.step(
+        step_deploy,
+        b.fmt("Deploy {s} to server", .{config.name}),
+    );
+    deploy_step.dependOn(&install_linux.step);
+
+    // Create deploy directory
+    const mkdir_cmd = b.addSystemCommand(&[_][]const u8{
+        "ssh",
+        "proto",
+        "mkdir -p deploy",
+    });
+    mkdir_cmd.step.dependOn(&install_linux.step);
+
+    // SCP binary to server
+    const scp_cmd = b.addSystemCommand(&[_][]const u8{
+        "scp",
+        b.fmt("zig-out/linux/{s}/{s}", .{ config.name, config.name }),
+        b.fmt("proto:~/deploy/{s}", .{config.name}),
+    });
+    scp_cmd.step.dependOn(&mkdir_cmd.step);
+    deploy_step.dependOn(&scp_cmd.step);
+
+    // ========================================================================
+    // Deploy and run
+    // ========================================================================
+    const run_remote_step = b.step(
+        step_run,
+        b.fmt("Deploy and run {s} on server", .{config.name}),
+    );
+    run_remote_step.dependOn(&scp_cmd.step);
+
+    const ssh_run = b.addSystemCommand(&[_][]const u8{
+        "ssh",
+        "-f",
+        "proto",
+        b.fmt(
+            "pkill {s} || true; cd deploy && nohup ./{s} -p {d} > {s}.log 2>&1 &",
+            .{ config.name, config.name, config.port, config.name },
+        ),
+    });
+    ssh_run.step.dependOn(&scp_cmd.step);
+    run_remote_step.dependOn(&ssh_run.step);
+
+    // ========================================================================
+    // Stop server
+    // ========================================================================
+    const stop_step = b.step(
+        step_stop,
+        b.fmt("Stop {s} server", .{config.name}),
+    );
+    const ssh_stop = b.addSystemCommand(&[_][]const u8{
+        "ssh",
+        "proto",
+        b.fmt("pkill {s} && echo 'Server stopped' || echo 'No server running'", .{config.name}),
+    });
+    stop_step.dependOn(&ssh_stop.step);
+
+    // ========================================================================
+    // Check status
+    // ========================================================================
+    const status_step = b.step(
+        step_status,
+        b.fmt("Check {s} server status", .{config.name}),
+    );
+    const ssh_status = b.addSystemCommand(&[_][]const u8{
+        "ssh",
+        "proto",
+        b.fmt("pgrep -a {s} || echo 'No server running'", .{config.name}),
+    });
+    status_step.dependOn(&ssh_status.step);
+
+    // ========================================================================
+    // View logs
+    // ========================================================================
+    const logs_step = b.step(
+        step_logs,
+        b.fmt("View {s} server logs", .{config.name}),
+    );
+    const ssh_logs = b.addSystemCommand(&[_][]const u8{
+        "ssh",
+        "proto",
+        b.fmt("tail -n 50 deploy/{s}.log || echo 'No log file found'", .{config.name}),
+    });
+    logs_step.dependOn(&ssh_logs.step);
+}
