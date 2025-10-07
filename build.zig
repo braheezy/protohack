@@ -14,9 +14,12 @@ const std = @import("std");
 //   zig build {name}-logs   - View server logs
 
 pub fn build(b: *std.Build) void {
+    const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
+
     // Add servers here - each call creates all build steps
-    addServer(b, "smoke", 3000);
-    // addServer(b, "prime-time", 3001);
+    addServer(b, "smoke", 3000, target, optimize);
+    addServer(b, "prime", 3001, target, optimize);
     // addServer(b, "means-to-end", 3002);
 }
 
@@ -30,7 +33,13 @@ const ServerConfig = struct {
 };
 
 /// Add all build steps for a server
-fn addServer(b: *std.Build, name: []const u8, port: u16) void {
+fn addServer(
+    b: *std.Build,
+    name: []const u8,
+    port: u16,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+) void {
     const config = ServerConfig{ .name = name, .port = port };
 
     // Allocate stable strings for step names
@@ -40,9 +49,6 @@ fn addServer(b: *std.Build, name: []const u8, port: u16) void {
     const step_stop = std.fmt.allocPrint(b.allocator, "{s}-stop", .{name}) catch @panic("OOM");
     const step_status = std.fmt.allocPrint(b.allocator, "{s}-status", .{name}) catch @panic("OOM");
     const step_logs = std.fmt.allocPrint(b.allocator, "{s}-logs", .{name}) catch @panic("OOM");
-
-    const target = b.standardTargetOptions(.{});
-    const optimize = b.standardOptimizeOption(.{});
 
     // Create the server framework module (shared by all servers)
     const server_module = b.createModule(.{
@@ -76,6 +82,9 @@ fn addServer(b: *std.Build, name: []const u8, port: u16) void {
     const run_step = b.step(config.name, b.fmt("Build and run {s} server locally", .{config.name}));
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
+    // Add default port argument
+    run_cmd.addArgs(&[_][]const u8{ "-p", b.fmt("{d}", .{config.port}) });
+    // Add any additional user-provided arguments
     if (b.args) |args| {
         run_cmd.addArgs(args);
     }

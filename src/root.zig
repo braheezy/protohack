@@ -13,23 +13,7 @@ const xev = @import("xev");
 // ============================================================================
 
 /// Run a TCP server with the given handler type
-pub fn run(comptime HandlerType: type) !void {
-    var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
-
-    // Memory allocation setup
-    const allocator, const is_debug = gpa: {
-        if (builtin.os.tag == .wasi) break :gpa .{ std.heap.wasm_allocator, false };
-        break :gpa switch (builtin.mode) {
-            .Debug, .ReleaseSafe => .{ debug_allocator.allocator(), true },
-            .ReleaseFast, .ReleaseSmall => .{ std.heap.smp_allocator, false },
-        };
-    };
-    defer if (is_debug) {
-        if (debug_allocator.deinit() == .leak) {
-            std.process.exit(1);
-        }
-    };
-
+pub fn run(allocator: std.mem.Allocator, comptime HandlerType: type) !void {
     // Parse command line arguments
     const args = try parseArgs(allocator);
     defer allocator.free(args.host);
@@ -62,6 +46,12 @@ pub fn run(comptime HandlerType: type) !void {
 // Handler Interface
 // ============================================================================
 
+/// Response from a handler
+pub const HandlerResponse = struct {
+    data: []const u8,
+    close_after_write: bool = true,
+};
+
 /// Handler interface that protocol implementations must provide
 pub fn Handler(comptime Self: type) type {
     return struct {
@@ -71,9 +61,10 @@ pub fn Handler(comptime Self: type) type {
             if (@hasDecl(Self, "onConnect")) Self.onConnect else defaultOnConnect;
 
         /// Called when data is received
-        /// Should return the response to send back (can be empty slice for no response)
-        /// Return error to close the connection
-        pub const onData: fn (self: *Self, data: []const u8) anyerror![]const u8 = Self.onData;
+        /// Should return the response to send back
+        /// Set close_after_write=true to disconnect after sending the response
+        /// Return error to close the connection immediately without sending a response
+        pub const onData: fn (self: *Self, allocator: std.mem.Allocator, data: []const u8) anyerror!HandlerResponse = Self.onData;
 
         /// Called when the connection is being closed
         pub const onClose: fn (self: *Self) void =
@@ -157,22 +148,28 @@ fn Server(comptime HandlerType: type) type {
         const Connection = struct {
             socket: xev.TCP,
             buffer: [4096]u8,
+            line_buffer: []u8,
+            line_buffer_len: usize,
             server: *Self,
             handler: HandlerType,
+            close_after_write: bool = false,
 
             fn create(allocator: std.mem.Allocator, socket: xev.TCP, server: *Self) !*Connection {
                 const conn = try allocator.create(Connection);
-                conn.* = .{
-                    .socket = socket,
-                    .buffer = undefined,
-                    .server = server,
-                    .handler = .{},
-                };
+                const line_buf = try allocator.alloc(u8, 8192);
+                conn.socket = socket;
+                conn.buffer = undefined;
+                conn.line_buffer = line_buf;
+                conn.line_buffer_len = 0;
+                conn.server = server;
+                conn.handler = .{};
+                conn.close_after_write = false;
                 return conn;
             }
 
             fn destroy(self: *Connection) void {
                 Handler(HandlerType).onClose(&self.handler);
+                self.server.allocator.free(self.line_buffer);
                 self.server.allocator.destroy(self);
             }
         };
@@ -288,21 +285,61 @@ fn Server(comptime HandlerType: type) type {
 
             std.log.debug("Read {} bytes", .{bytes_read});
 
-            // Process the data through the handler
-            const response = Handler(HandlerType).onData(&conn.handler, buffer.slice[0..bytes_read]) catch |err| {
-                std.log.err("Handler error: {}", .{err});
+            // Append new data to line buffer
+            if (conn.line_buffer_len + bytes_read > conn.line_buffer.len) {
+                std.log.err("Line buffer overflow", .{});
                 socket.close(loop, c, Connection, conn, closeCallback);
                 return .disarm;
-            };
+            }
+            @memcpy(conn.line_buffer[conn.line_buffer_len..][0..bytes_read], buffer.slice[0..bytes_read]);
+            conn.line_buffer_len += bytes_read;
 
-            // If there's a response, write it back
-            if (response.len > 0) {
-                const c_write = conn.server.allocator.create(xev.Completion) catch |err| {
-                    std.log.err("Failed to create write completion: {}", .{err});
+            // Process all complete lines
+            var processed_until: usize = 0;
+            while (std.mem.indexOfScalarPos(u8, conn.line_buffer[0..conn.line_buffer_len], processed_until, '\n')) |newline_pos| {
+                // Extract the line (including the newline)
+                const line = conn.line_buffer[processed_until .. newline_pos + 1];
+                std.log.info("Processing line: {s}", .{std.mem.trimRight(u8, line, "\n\r")});
+
+                // Process the line through the handler
+                const handler_response = Handler(HandlerType).onData(&conn.handler, conn.server.allocator, line) catch |err| {
+                    std.log.err("Handler error: {}", .{err});
                     socket.close(loop, c, Connection, conn, closeCallback);
                     return .disarm;
                 };
-                socket.write(loop, c_write, .{ .slice = response }, Connection, conn, writeCallback);
+
+                processed_until = newline_pos + 1;
+
+                // Store whether to close after write
+                conn.close_after_write = handler_response.close_after_write;
+
+                // If there's a response, write it back
+                if (handler_response.data.len > 0) {
+                    const c_write = conn.server.allocator.create(xev.Completion) catch |err| {
+                        std.log.err("Failed to create write completion: {}", .{err});
+                        socket.close(loop, c, Connection, conn, closeCallback);
+                        return .disarm;
+                    };
+                    socket.write(loop, c_write, .{ .slice = handler_response.data }, Connection, conn, writeCallback);
+
+                    // If closing after write, disarm now - writeCallback will handle the close
+                    if (conn.close_after_write) {
+                        return .disarm;
+                    }
+                } else if (conn.close_after_write) {
+                    // No response but should close
+                    socket.close(loop, c, Connection, conn, closeCallback);
+                    return .disarm;
+                }
+            }
+
+            // Remove processed data from buffer
+            if (processed_until > 0) {
+                const remaining = conn.line_buffer_len - processed_until;
+                if (remaining > 0) {
+                    std.mem.copyForwards(u8, conn.line_buffer[0..remaining], conn.line_buffer[processed_until..conn.line_buffer_len]);
+                }
+                conn.line_buffer_len = remaining;
             }
 
             // Continue reading (rearm)
@@ -312,9 +349,9 @@ fn Server(comptime HandlerType: type) type {
         /// Called when data is written to a connection
         fn writeCallback(
             conn_: ?*Connection,
-            _: *xev.Loop,
+            loop: *xev.Loop,
             c: *xev.Completion,
-            _: xev.TCP,
+            socket: xev.TCP,
             _: xev.WriteBuffer,
             result: xev.WriteError!usize,
         ) xev.CallbackAction {
@@ -327,6 +364,13 @@ fn Server(comptime HandlerType: type) type {
             };
 
             std.log.debug("Wrote {} bytes", .{bytes_written});
+
+            // Check if we should close after writing
+            if (conn.close_after_write) {
+                std.log.info("Closing connection after write", .{});
+                socket.close(loop, c, Connection, conn, closeCallback);
+                return .disarm;
+            }
 
             // We're done with this write completion
             conn.server.allocator.destroy(c);
