@@ -1,0 +1,41 @@
+[Wed Oct  8 05:58:33 2025 UTC] [0simple.test] NOTE:check starts
+[Wed Oct  8 05:58:33 2025 UTC] [0simple.test] NOTE:connected to 34.204.18.159 port 3001
+[Wed Oct  8 05:58:35 2025 UTC] [0simple.test] NOTE:handled all 25 requests correctly
+[Wed Oct  8 05:58:35 2025 UTC] [0simple.test] PASS
+[Wed Oct  8 05:58:36 2025 UTC] [1multiclient.test] NOTE:check starts
+[Wed Oct  8 05:58:36 2025 UTC] [1multiclient.test] NOTE:connected to 34.204.18.159 port 3001
+[Wed Oct  8 05:58:37 2025 UTC] [1multiclient.test] NOTE:connected to 34.204.18.159 port 3001
+[Wed Oct  8 05:58:37 2025 UTC] [1multiclient.test] NOTE:connected to 34.204.18.159 port 3001
+[Wed Oct  8 05:58:37 2025 UTC] [1multiclient.test] NOTE:connected to 34.204.18.159 port 3001
+[Wed Oct  8 05:58:37 2025 UTC] [1multiclient.test] NOTE:connected to 34.204.18.159 port 3001
+[Wed Oct  8 05:58:38 2025 UTC] [1multiclient.test] NOTE:handled all 4000 requests correctly
+[Wed Oct  8 05:58:38 2025 UTC] [1multiclient.test] PASS
+[Wed Oct  8 05:58:39 2025 UTC] [2malformedrequests.test] NOTE:check starts
+[Wed Oct  8 05:58:39 2025 UTC] [2malformedrequests.test] NOTE:connected to 34.204.18.159 port 3001
+[Wed Oct  8 05:58:39 2025 UTC] [2malformedrequests.test] NOTE:connected to 34.204.18.159 port 3001
+[Wed Oct  8 05:58:39 2025 UTC] [2malformedrequests.test] NOTE:connected to 34.204.18.159 port 3001
+[Wed Oct  8 05:58:40 2025 UTC] [2malformedrequests.test] NOTE:connected to 34.204.18.159 port 3001
+[Wed Oct  8 05:58:40 2025 UTC] [2malformedrequests.test] NOTE:connected to 34.204.18.159 port 3001
+[Wed Oct  8 05:58:40 2025 UTC] [2malformedrequests.test] NOTE:connected to 34.204.18.159 port 3001
+[Wed Oct  8 05:58:40 2025 UTC] [2malformedrequests.test] NOTE:connected to 34.204.18.159 port 3001
+[Wed Oct  8 05:58:41 2025 UTC] [2malformedrequests.test] NOTE:connected to 34.204.18.159 port 3001
+[Wed Oct  8 05:58:41 2025 UTC] [2malformedrequests.test] NOTE:connected to 34.204.18.159 port 3001
+[Wed Oct  8 05:58:41 2025 UTC] [2malformedrequests.test] NOTE:connected to 34.204.18.159 port 3001
+[Wed Oct  8 05:58:42 2025 UTC] [2malformedrequests.test] NOTE:connected to 34.204.18.159 port 3001
+[Wed Oct  8 05:58:42 2025 UTC] [2malformedrequests.test] NOTE:connected to 34.204.18.159 port 3001
+[Wed Oct  8 05:58:42 2025 UTC] [2malformedrequests.test] NOTE:connected to 34.204.18.159 port 3001
+[Wed Oct  8 05:58:42 2025 UTC] [2malformedrequests.test] NOTE:connected to 34.204.18.159 port 3001
+[Wed Oct  8 05:58:43 2025 UTC] [2malformedrequests.test] NOTE:connected to 34.204.18.159 port 3001
+[Wed Oct  8 05:58:43 2025 UTC] [2malformedrequests.test] NOTE:connected to 34.204.18.159 port 3001
+[Wed Oct  8 05:58:43 2025 UTC] [2malformedrequests.test] NOTE:connected to 34.204.18.159 port 3001
+[Wed Oct  8 05:58:43 2025 UTC] [2malformedrequests.test] PASS
+[Wed Oct  8 05:58:44 2025 UTC] [3wellformedrequests.test] NOTE:check starts
+[Wed Oct  8 05:58:45 2025 UTC] [3wellformedrequests.test] NOTE:connected to 34.204.18.159 port 3001
+[Wed Oct  8 05:58:45 2025 UTC] [3wellformedrequests.test] NOTE:connected to 34.204.18.159 port 3001
+[Wed Oct  8 05:58:45 2025 UTC] [3wellformedrequests.test] NOTE:connected to 34.204.18.159 port 3001
+[Wed Oct  8 05:58:46 2025 UTC] [3wellformedrequests.test] NOTE:connected to 34.204.18.159 port 3001
+[Wed Oct  8 05:58:46 2025 UTC] [3wellformedrequests.test] NOTE:connected to 34.204.18.159 port 3001
+[Wed Oct  8 05:58:46 2025 UTC] [3wellformedrequests.test] NOTE:connected to 34.204.18.159 port 3001
+[Wed Oct  8 05:58:46 2025 UTC] [3wellformedrequests.test] NOTE:connected to 34.204.18.159 port 3001
+[Wed Oct  8 05:58:46 2025 UTC] [3wellformedrequests.test] NOTE:connected to 34.204.18.159 port 3001
+[Wed Oct  8 05:58:46 2025 UTC] [3wellformedrequests.test] PASS

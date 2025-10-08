@@ -156,7 +156,7 @@ fn Server(comptime HandlerType: type) type {
 
             fn create(allocator: std.mem.Allocator, socket: xev.TCP, server: *Self) !*Connection {
                 const conn = try allocator.create(Connection);
-                const line_buf = try allocator.alloc(u8, 8192);
+                const line_buf = try allocator.alloc(u8, 1024 * 1024);
                 conn.socket = socket;
                 conn.buffer = undefined;
                 conn.line_buffer = line_buf;

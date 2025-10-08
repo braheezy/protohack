@@ -171,8 +171,8 @@ fn addServer(
         "-f",
         "proto",
         b.fmt(
-            "pkill {s} || true; cd deploy && nohup ./{s} -p {d} > {s}.log 2>&1 &",
-            .{ config.name, config.name, config.port, config.name },
+            "cd deploy && nohup ./{s} -p {d} > {s}.log 2>&1 &",
+            .{ config.name, config.port, config.name },
         ),
     });
     ssh_run.step.dependOn(&scp_cmd.step);
@@ -191,6 +191,7 @@ fn addServer(
         b.fmt("pkill {s} && echo 'Server stopped' || echo 'No server running'", .{config.name}),
     });
     stop_step.dependOn(&ssh_stop.step);
+    scp_cmd.step.dependOn(&ssh_stop.step);
 
     // ========================================================================
     // Check status
