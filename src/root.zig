@@ -46,6 +46,14 @@ pub fn run(allocator: std.mem.Allocator, comptime HandlerType: type) !void {
 // Handler Interface
 // ============================================================================
 
+/// Protocol mode for message framing
+pub const ProtocolMode = union(enum) {
+    /// Line-based protocol (messages delimited by \n)
+    line_based,
+    /// Binary protocol with fixed-size messages
+    binary_fixed: usize,
+};
+
 /// Response from a handler
 pub const HandlerResponse = struct {
     data: []const u8,
@@ -55,9 +63,13 @@ pub const HandlerResponse = struct {
 /// Handler interface that protocol implementations must provide
 pub fn Handler(comptime Self: type) type {
     return struct {
+        /// Protocol mode - defaults to line_based if not specified
+        pub const protocol_mode: ProtocolMode =
+            if (@hasDecl(Self, "protocol_mode")) Self.protocol_mode else .line_based;
+
         /// Called when a new connection is established
         /// Return true to accept the connection, false to reject it
-        pub const onConnect: fn (self: *Self) bool =
+        pub const onConnect: fn (self: *Self, allocator: std.mem.Allocator) bool =
             if (@hasDecl(Self, "onConnect")) Self.onConnect else defaultOnConnect;
 
         /// Called when data is received
@@ -70,7 +82,7 @@ pub fn Handler(comptime Self: type) type {
         pub const onClose: fn (self: *Self) void =
             if (@hasDecl(Self, "onClose")) Self.onClose else defaultOnClose;
 
-        fn defaultOnConnect(_: *Self) bool {
+        fn defaultOnConnect(_: *Self, _: std.mem.Allocator) bool {
             return true;
         }
 
@@ -172,6 +184,47 @@ fn Server(comptime HandlerType: type) type {
                 self.server.allocator.free(self.line_buffer);
                 self.server.allocator.destroy(self);
             }
+
+            /// Process a single message through the handler
+            /// Returns false if the connection should be disarmed
+            fn processMessage(
+                self: *Connection,
+                loop: *xev.Loop,
+                c: *xev.Completion,
+                socket: xev.TCP,
+                message: []const u8,
+            ) bool {
+                // Process through the handler
+                const handler_response = Handler(HandlerType).onData(&self.handler, self.server.allocator, message) catch |err| {
+                    std.log.err("Handler error: {}", .{err});
+                    socket.close(loop, c, Connection, self, closeCallback);
+                    return false;
+                };
+
+                // Store whether to close after write
+                self.close_after_write = handler_response.close_after_write;
+
+                // If there's a response, write it back
+                if (handler_response.data.len > 0) {
+                    const c_write = self.server.allocator.create(xev.Completion) catch |err| {
+                        std.log.err("Failed to create write completion: {}", .{err});
+                        socket.close(loop, c, Connection, self, closeCallback);
+                        return false;
+                    };
+                    socket.write(loop, c_write, .{ .slice = handler_response.data }, Connection, self, writeCallback);
+
+                    // If closing after write, disarm now - writeCallback will handle the close
+                    if (self.close_after_write) {
+                        return false;
+                    }
+                } else if (self.close_after_write) {
+                    // No response but should close
+                    socket.close(loop, c, Connection, self, closeCallback);
+                    return false;
+                }
+
+                return true;
+            }
         };
 
         pub fn init(allocator: std.mem.Allocator, loop: *xev.Loop, host: []const u8, port: u16) !Self {
@@ -230,7 +283,7 @@ fn Server(comptime HandlerType: type) type {
             };
 
             // Call the handler's onConnect
-            if (!Handler(HandlerType).onConnect(&conn.handler)) {
+            if (!Handler(HandlerType).onConnect(&conn.handler, self.allocator)) {
                 std.log.info("Connection rejected by handler", .{});
                 conn.destroy();
                 self.allocator.destroy(c);
@@ -285,52 +338,49 @@ fn Server(comptime HandlerType: type) type {
 
             std.log.debug("Read {} bytes", .{bytes_read});
 
-            // Append new data to line buffer
+            // Append new data to buffer
             if (conn.line_buffer_len + bytes_read > conn.line_buffer.len) {
-                std.log.err("Line buffer overflow", .{});
+                std.log.err("Buffer overflow", .{});
                 socket.close(loop, c, Connection, conn, closeCallback);
                 return .disarm;
             }
             @memcpy(conn.line_buffer[conn.line_buffer_len..][0..bytes_read], buffer.slice[0..bytes_read]);
             conn.line_buffer_len += bytes_read;
 
-            // Process all complete lines
+            // Process messages based on protocol mode
+            const protocol_mode = Handler(HandlerType).protocol_mode;
             var processed_until: usize = 0;
-            while (std.mem.indexOfScalarPos(u8, conn.line_buffer[0..conn.line_buffer_len], processed_until, '\n')) |newline_pos| {
-                // Extract the line (including the newline)
-                const line = conn.line_buffer[processed_until .. newline_pos + 1];
-                std.log.info("Processing line: {s}", .{std.mem.trimRight(u8, line, "\n\r")});
 
-                // Process the line through the handler
-                const handler_response = Handler(HandlerType).onData(&conn.handler, conn.server.allocator, line) catch |err| {
-                    std.log.err("Handler error: {}", .{err});
-                    socket.close(loop, c, Connection, conn, closeCallback);
-                    return .disarm;
-                };
+            switch (protocol_mode) {
+                .line_based => {
+                    // Process all complete lines (delimited by \n)
+                    while (std.mem.indexOfScalarPos(u8, conn.line_buffer[0..conn.line_buffer_len], processed_until, '\n')) |newline_pos| {
+                        // Extract the line (including the newline)
+                        const line = conn.line_buffer[processed_until .. newline_pos + 1];
+                        std.log.info("Processing line: {s}", .{std.mem.trimRight(u8, line, "\n\r")});
 
-                processed_until = newline_pos + 1;
+                        // Process through handler
+                        if (!conn.processMessage(loop, c, socket, line)) {
+                            return .disarm;
+                        }
 
-                // Store whether to close after write
-                conn.close_after_write = handler_response.close_after_write;
-
-                // If there's a response, write it back
-                if (handler_response.data.len > 0) {
-                    const c_write = conn.server.allocator.create(xev.Completion) catch |err| {
-                        std.log.err("Failed to create write completion: {}", .{err});
-                        socket.close(loop, c, Connection, conn, closeCallback);
-                        return .disarm;
-                    };
-                    socket.write(loop, c_write, .{ .slice = handler_response.data }, Connection, conn, writeCallback);
-
-                    // If closing after write, disarm now - writeCallback will handle the close
-                    if (conn.close_after_write) {
-                        return .disarm;
+                        processed_until = newline_pos + 1;
                     }
-                } else if (conn.close_after_write) {
-                    // No response but should close
-                    socket.close(loop, c, Connection, conn, closeCallback);
-                    return .disarm;
-                }
+                },
+                .binary_fixed => |message_size| {
+                    // Process all complete fixed-size messages
+                    while (processed_until + message_size <= conn.line_buffer_len) {
+                        const message = conn.line_buffer[processed_until .. processed_until + message_size];
+                        std.log.debug("Processing binary message of {} bytes", .{message_size});
+
+                        // Process through handler
+                        if (!conn.processMessage(loop, c, socket, message)) {
+                            return .disarm;
+                        }
+
+                        processed_until += message_size;
+                    }
+                },
             }
 
             // Remove processed data from buffer

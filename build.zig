@@ -20,7 +20,7 @@ pub fn build(b: *std.Build) void {
     // Add servers here - each call creates all build steps
     addServer(b, "smoke", 3000, target, optimize);
     addServer(b, "prime", 3001, target, optimize);
-    // addServer(b, "means-to-end", 3002);
+    addServer(b, "prices", 3002, target, optimize);
 }
 
 // ============================================================================

@@ -1,0 +1,29 @@
+[Sun Oct 19 05:31:42 2025 UTC] [0example.test] NOTE:check starts
+[Sun Oct 19 05:31:42 2025 UTC] [0example.test] NOTE:connected to 34.204.18.159 port 3002
+[Sun Oct 19 05:31:42 2025 UTC] [0example.test] NOTE:sending example data
+[Sun Oct 19 05:31:43 2025 UTC] [0example.test] PASS
+[Sun Oct 19 05:31:44 2025 UTC] [1main.test] NOTE:check starts
+[Sun Oct 19 05:31:44 2025 UTC] [1main.test] NOTE:4 simultaneous clients
+[Sun Oct 19 05:31:44 2025 UTC] [1main.test] NOTE:connected to 34.204.18.159 port 3002
+[Sun Oct 19 05:31:44 2025 UTC] [1main.test] NOTE:connected to 34.204.18.159 port 3002
+[Sun Oct 19 05:31:44 2025 UTC] [1main.test] NOTE:connected to 34.204.18.159 port 3002
+[Sun Oct 19 05:31:44 2025 UTC] [1main.test] NOTE:connected to 34.204.18.159 port 3002
+[Sun Oct 19 05:31:48 2025 UTC] [1main.test] PASS
+[Sun Oct 19 05:31:49 2025 UTC] [2largedata.test] NOTE:check starts
+[Sun Oct 19 05:31:49 2025 UTC] [2largedata.test] NOTE:inserting 200k prices in random order
+[Sun Oct 19 05:31:49 2025 UTC] [2largedata.test] NOTE:connected to 34.204.18.159 port 3002
+[Sun Oct 19 05:31:52 2025 UTC] [2largedata.test] PASS
+[Sun Oct 19 05:31:54 2025 UTC] [3badclient.test] NOTE:check starts
+[Sun Oct 19 05:31:54 2025 UTC] [3badclient.test] NOTE:checking whether bad clients can disrupt good clients
+[Sun Oct 19 05:31:54 2025 UTC] [3badclient.test] NOTE:connected to 34.204.18.159 port 3002
+[Sun Oct 19 05:31:54 2025 UTC] [3badclient.test] NOTE:connected to 34.204.18.159 port 3002
+[Sun Oct 19 05:31:54 2025 UTC] [3badclient.test] NOTE:connected to 34.204.18.159 port 3002
+[Sun Oct 19 05:31:54 2025 UTC] [3badclient.test] NOTE:connected to 34.204.18.159 port 3002
+[Sun Oct 19 05:31:54 2025 UTC] [3badclient.test] NOTE:sending an incomplete message
+[Sun Oct 19 05:31:54 2025 UTC] [3badclient.test] NOTE:sending an illegal message type
+[Sun Oct 19 05:31:54 2025 UTC] [3badclient.test] NOTE:disconnecting immediately after sending a query
+[Sun Oct 19 05:31:54 2025 UTC] [3badclient.test] PASS
+[Sun Oct 19 05:31:55 2025 UTC] [4intoverflow.test] NOTE:check starts
+[Sun Oct 19 05:31:55 2025 UTC] [4intoverflow.test] NOTE:testing for integer overflow
+[Sun Oct 19 05:31:55 2025 UTC] [4intoverflow.test] NOTE:connected to 34.204.18.159 port 3002
+[Sun Oct 19 05:31:55 2025 UTC] [4intoverflow.test] PASS
