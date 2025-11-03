@@ -45,7 +45,6 @@ const PrimeHandler = struct {
             .{ .ignore_unknown_fields = true },
         ) catch |err| {
             return switch (err) {
-                // std.json.ParseFromValueError.UnexpectedToken => .{ .data = try createResponse(allocator, false), .close_after_write = false },
                 else => {
                     std.log.info("malformed JSON error: {any}", .{err});
                     return .{ .data = "malformed\n" };

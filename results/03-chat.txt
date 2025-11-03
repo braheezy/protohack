@@ -1,0 +1,51 @@
+[Mon Nov  3 07:24:20 2025 UTC] [1client.test] NOTE:check starts
+[Mon Nov  3 07:24:20 2025 UTC] [1client.test] NOTE:connected to 34.204.18.159 port 3003
+[Mon Nov  3 07:24:23 2025 UTC] [1client.test] PASS
+[Mon Nov  3 07:24:24 2025 UTC] [2clients.test] NOTE:check starts
+[Mon Nov  3 07:24:24 2025 UTC] [2clients.test] NOTE:watchman connected to 34.204.18.159 port 3003
+[Mon Nov  3 07:24:24 2025 UTC] [2clients.test] NOTE:watchman joined the chat room
+[Mon Nov  3 07:24:25 2025 UTC] [2clients.test] NOTE:alice connected to 34.204.18.159 port 3003
+[Mon Nov  3 07:24:25 2025 UTC] [2clients.test] NOTE:bob connected to 34.204.18.159 port 3003
+[Mon Nov  3 07:24:25 2025 UTC] [2clients.test] NOTE:alice joined the chat room
+[Mon Nov  3 07:24:25 2025 UTC] [2clients.test] NOTE:bob joined the chat room
+[Mon Nov  3 07:24:31 2025 UTC] [2clients.test] PASS
+[Mon Nov  3 07:24:32 2025 UTC] [3illegalname.test] NOTE:check starts
+[Mon Nov  3 07:24:32 2025 UTC] [3illegalname.test] NOTE:connected to 34.204.18.159 port 3003
+[Mon Nov  3 07:24:32 2025 UTC] [3illegalname.test] PASS
+[Mon Nov  3 07:24:33 2025 UTC] [4many.test] NOTE:check starts
+[Mon Nov  3 07:24:33 2025 UTC] [4many.test] NOTE:watchman connected to 34.204.18.159 port 3003
+[Mon Nov  3 07:24:33 2025 UTC] [4many.test] NOTE:watchman joined the chat room
+[Mon Nov  3 07:24:33 2025 UTC] [4many.test] NOTE:BlueNewbie359 connected to 34.204.18.159 port 3003
+[Mon Nov  3 07:24:33 2025 UTC] [4many.test] NOTE:BlueNewbie359 joined the chat room
+[Mon Nov  3 07:24:34 2025 UTC] [4many.test] NOTE:BlueNewbie359 (fully joined) disconnected
+[Mon Nov  3 07:24:34 2025 UTC] [4many.test] NOTE:BlueDev451 connected to 34.204.18.159 port 3003
+[Mon Nov  3 07:24:34 2025 UTC] [4many.test] NOTE:BlueDev451 (hadn't yet sent name) disconnected
+[Mon Nov  3 07:24:34 2025 UTC] [4many.test] NOTE:SmallBob205 connected to 34.204.18.159 port 3003
+[Mon Nov  3 07:24:34 2025 UTC] [4many.test] NOTE:SmallBob205 joined the chat room
+[Mon Nov  3 07:24:35 2025 UTC] [4many.test] NOTE:CrazyBob669 connected to 34.204.18.159 port 3003
+[Mon Nov  3 07:24:35 2025 UTC] [4many.test] NOTE:CrazyBob669 (hadn't yet sent name) disconnected
+[Mon Nov  3 07:24:36 2025 UTC] [4many.test] NOTE:TinyHatter329 connected to 34.204.18.159 port 3003
+[Mon Nov  3 07:24:36 2025 UTC] [4many.test] NOTE:TinyHatter329 joined the chat room
+[Mon Nov  3 07:24:37 2025 UTC] [4many.test] NOTE:TinyHatter329 (fully joined) disconnected
+[Mon Nov  3 07:24:38 2025 UTC] [4many.test] NOTE:SmallNewbie806 connected to 34.204.18.159 port 3003
+[Mon Nov  3 07:24:38 2025 UTC] [4many.test] NOTE:RedWizard775 connected to 34.204.18.159 port 3003
+[Mon Nov  3 07:24:38 2025 UTC] [4many.test] NOTE:SmallNewbie806 joined the chat room
+[Mon Nov  3 07:24:39 2025 UTC] [4many.test] NOTE:RedWizard775 (hadn't yet sent name) disconnected
+[Mon Nov  3 07:24:39 2025 UTC] [4many.test] NOTE:TinyNewbie846 connected to 34.204.18.159 port 3003
+[Mon Nov  3 07:24:40 2025 UTC] [4many.test] NOTE:RichHunter427 connected to 34.204.18.159 port 3003
+[Mon Nov  3 07:24:40 2025 UTC] [4many.test] NOTE:RichHunter427 (hadn't yet sent name) disconnected
+[Mon Nov  3 07:24:40 2025 UTC] [4many.test] NOTE:SmallNewbie806 (fully joined) disconnected
+[Mon Nov  3 07:24:41 2025 UTC] [4many.test] NOTE:TinyNewbie846 joined the chat room
+[Mon Nov  3 07:24:41 2025 UTC] [4many.test] NOTE:GreenDev222 connected to 34.204.18.159 port 3003
+[Mon Nov  3 07:24:42 2025 UTC] [4many.test] NOTE:GreenDev222 joined the chat room
+[Mon Nov  3 07:24:42 2025 UTC] [4many.test] NOTE:GreenDev858 connected to 34.204.18.159 port 3003
+[Mon Nov  3 07:24:42 2025 UTC] [4many.test] NOTE:TinyNewbie846 (fully joined) disconnected
+[Mon Nov  3 07:24:42 2025 UTC] [4many.test] NOTE:GreenDev858 joined the chat room
+[Mon Nov  3 07:24:42 2025 UTC] [4many.test] NOTE:SaneHunter54 connected to 34.204.18.159 port 3003
+[Mon Nov  3 07:24:43 2025 UTC] [4many.test] NOTE:SaneHunter54 (hadn't yet sent name) disconnected
+[Mon Nov  3 07:24:43 2025 UTC] [4many.test] NOTE:GreenDev858 (fully joined) disconnected
+[Mon Nov  3 07:24:43 2025 UTC] [4many.test] NOTE:ProtoAlice696 connected to 34.204.18.159 port 3003
+[Mon Nov  3 07:24:44 2025 UTC] [4many.test] NOTE:ProtoAlice696 (hadn't yet sent name) disconnected
+[Mon Nov  3 07:24:45 2025 UTC] [4many.test] NOTE:SmallBob205 (fully joined) disconnected
+[Mon Nov  3 07:24:45 2025 UTC] [4many.test] NOTE:GreenDev222 (fully joined) disconnected
+[Mon Nov  3 07:24:48 2025 UTC] [4many.test] PASS

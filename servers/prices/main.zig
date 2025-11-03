@@ -32,12 +32,12 @@ const PricesHandler = struct {
     // Specify binary protocol with 9-byte fixed messages
     pub const protocol_mode: server.ProtocolMode = .{ .binary_fixed = 9 };
 
-    pub fn onConnect(self: *PricesHandler, allocator: std.mem.Allocator) bool {
+    pub fn onConnect(self: *PricesHandler, allocator: std.mem.Allocator) ?server.HandlerResponse {
         self.asset = std.AutoHashMap(i32, i32).init(allocator);
-        return true;
+        return .{};
     }
 
-    pub fn onClose(self: *PricesHandler) void {
+    pub fn onClose(self: *PricesHandler) !void {
         self.asset.deinit();
     }
 

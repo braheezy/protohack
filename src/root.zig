@@ -12,6 +12,74 @@ const xev = @import("xev");
 // Public API
 // ============================================================================
 
+/// Connection type for a given handler
+pub fn ConnectionType(comptime HandlerType: type) type {
+    return Server(HandlerType).Connection;
+}
+
+/// Thread-local storage for current server instance
+threadlocal var current_server: ?*anyopaque = null;
+
+fn getCurrentServer(comptime HandlerType: type) ?*Server(HandlerType) {
+    const ptr = current_server orelse return null;
+    return @ptrCast(@alignCast(ptr));
+}
+
+/// Get all active connections
+pub fn getAllConnections(comptime HandlerType: type) []*ConnectionType(HandlerType) {
+    const server_ptr = getCurrentServer(HandlerType) orelse return &[_]*ConnectionType(HandlerType){};
+    return server_ptr.connections.items;
+}
+
+/// Write data to a connection
+pub fn writeToConnection(comptime HandlerType: type, conn: *ConnectionType(HandlerType), data: []const u8) !void {
+    const server = getCurrentServer(HandlerType) orelse return error.NoServer;
+    const c_write = server.allocator.create(xev.Completion) catch |err| {
+        std.log.err("Failed to create write completion: {}", .{err});
+        return err;
+    };
+    // Use the Server's internal writeCallback through a wrapper
+    conn.socket.write(server.loop, c_write, .{ .slice = data }, ConnectionType(HandlerType), conn, writeCompletionWrapper(HandlerType));
+}
+
+fn writeCompletionWrapper(comptime HandlerType: type) fn (
+    ?*Server(HandlerType).Connection,
+    *xev.Loop,
+    *xev.Completion,
+    xev.TCP,
+    xev.WriteBuffer,
+    xev.WriteError!usize,
+) xev.CallbackAction {
+    const Connection = Server(HandlerType).Connection;
+    return struct {
+        fn callback(
+            _: ?*Connection,
+            _: *xev.Loop,
+            c: *xev.Completion,
+            _: xev.TCP,
+            _: xev.WriteBuffer,
+            result: xev.WriteError!usize,
+        ) xev.CallbackAction {
+            // Get allocator from global server reference, not through connection
+            // (connection might be partially destroyed)
+            const server = getCurrentServer(HandlerType);
+            const allocator = if (server) |s| s.allocator else {
+                // Server is gone, leak completion rather than crash
+                return .disarm;
+            };
+
+            _ = result catch |err| {
+                std.log.err("Write error: {}", .{err});
+                allocator.destroy(c);
+                return .disarm;
+            };
+            // Clean up the completion, connection is still active
+            allocator.destroy(c);
+            return .disarm;
+        }
+    }.callback;
+}
+
 /// Run a TCP server with the given handler type
 pub fn run(allocator: std.mem.Allocator, comptime HandlerType: type) !void {
     // Parse command line arguments
@@ -32,6 +100,10 @@ pub fn run(allocator: std.mem.Allocator, comptime HandlerType: type) !void {
     // Create the server with the handler
     var server = try Server(HandlerType).init(allocator, &loop, args.host, args.port);
     defer server.deinit();
+
+    // Set thread-local server reference for handler access
+    current_server = @ptrCast(&server);
+    defer current_server = null;
 
     std.log.info("Server listening on {s}:{d}", .{ args.host, args.port });
 
@@ -56,8 +128,8 @@ pub const ProtocolMode = union(enum) {
 
 /// Response from a handler
 pub const HandlerResponse = struct {
-    data: []const u8,
-    close_after_write: bool = true,
+    data: []const u8 = "",
+    close_after_write: bool = false,
 };
 
 /// Handler interface that protocol implementations must provide
@@ -68,8 +140,9 @@ pub fn Handler(comptime Self: type) type {
             if (@hasDecl(Self, "protocol_mode")) Self.protocol_mode else .line_based;
 
         /// Called when a new connection is established
-        /// Return true to accept the connection, false to reject it
-        pub const onConnect: fn (self: *Self, allocator: std.mem.Allocator) bool =
+        /// Return HandlerResponse to accept and optionally send initial data
+        /// Return null to reject the connection
+        pub const onConnect: fn (self: *Self, allocator: std.mem.Allocator) ?HandlerResponse =
             if (@hasDecl(Self, "onConnect")) Self.onConnect else defaultOnConnect;
 
         /// Called when data is received
@@ -79,14 +152,14 @@ pub fn Handler(comptime Self: type) type {
         pub const onData: fn (self: *Self, allocator: std.mem.Allocator, data: []const u8) anyerror!HandlerResponse = Self.onData;
 
         /// Called when the connection is being closed
-        pub const onClose: fn (self: *Self) void =
+        pub const onClose: fn (self: *Self) anyerror!void =
             if (@hasDecl(Self, "onClose")) Self.onClose else defaultOnClose;
 
-        fn defaultOnConnect(_: *Self, _: std.mem.Allocator) bool {
-            return true;
+        fn defaultOnConnect(_: *Self, _: std.mem.Allocator) ?HandlerResponse {
+            return .{};
         }
 
-        fn defaultOnClose(_: *Self) void {}
+        fn defaultOnClose(_: *Self) !void {}
     };
 }
 
@@ -152,12 +225,8 @@ fn Server(comptime HandlerType: type) type {
     return struct {
         const Self = @This();
 
-        allocator: std.mem.Allocator,
-        loop: *xev.Loop,
-        socket: xev.TCP,
-
         /// Connection represents a single client connection with handler state
-        const Connection = struct {
+        pub const Connection = struct {
             socket: xev.TCP,
             buffer: [4096]u8,
             line_buffer: []u8,
@@ -176,11 +245,24 @@ fn Server(comptime HandlerType: type) type {
                 conn.server = server;
                 conn.handler = .{};
                 conn.close_after_write = false;
+                // Register connection
+                server.connections.append(server.allocator, conn) catch |err| {
+                    allocator.free(line_buf);
+                    allocator.destroy(conn);
+                    return err;
+                };
                 return conn;
             }
 
-            fn destroy(self: *Connection) void {
-                Handler(HandlerType).onClose(&self.handler);
+            fn destroy(self: *Connection) !void {
+                try Handler(HandlerType).onClose(&self.handler);
+                // Unregister connection
+                for (self.server.connections.items, 0..) |conn, i| {
+                    if (conn == self) {
+                        _ = self.server.connections.swapRemove(i);
+                        break;
+                    }
+                }
                 self.server.allocator.free(self.line_buffer);
                 self.server.allocator.destroy(self);
             }
@@ -227,6 +309,13 @@ fn Server(comptime HandlerType: type) type {
             }
         };
 
+        const ConnectionsList = std.ArrayListUnmanaged(*Connection);
+
+        allocator: std.mem.Allocator,
+        loop: *xev.Loop,
+        socket: xev.TCP,
+        connections: ConnectionsList,
+
         pub fn init(allocator: std.mem.Allocator, loop: *xev.Loop, host: []const u8, port: u16) !Self {
             // Parse the address - try IPv4 first, then IPv6
             const addr = std.net.Address.parseIp4(host, port) catch
@@ -242,14 +331,16 @@ fn Server(comptime HandlerType: type) type {
             try socket.bind(addr);
             try socket.listen(128); // backlog of 128 connections
 
-            return .{
-                .allocator = allocator,
-                .loop = loop,
-                .socket = socket,
-            };
+            var result: Self = undefined;
+            result.allocator = allocator;
+            result.loop = loop;
+            result.socket = socket;
+            result.connections = .{};
+            return result;
         }
 
-        pub fn deinit(_: *Self) void {
+        pub fn deinit(self: *Self) void {
+            self.connections.deinit(self.allocator);
             // Cleanup is handled by loop.deinit()
         }
 
@@ -283,14 +374,28 @@ fn Server(comptime HandlerType: type) type {
             };
 
             // Call the handler's onConnect
-            if (!Handler(HandlerType).onConnect(&conn.handler, self.allocator)) {
+            const connect_response = Handler(HandlerType).onConnect(&conn.handler, self.allocator);
+            if (connect_response == null) {
                 std.log.info("Connection rejected by handler", .{});
-                conn.destroy();
+                conn.destroy() catch |err| {
+                    std.log.err("Error destroying connection: {}", .{err});
+                };
                 self.allocator.destroy(c);
                 return .disarm;
             }
 
             std.log.info("New connection accepted", .{});
+
+            // If there's initial data to send, write it
+            if (connect_response.?.data.len > 0) {
+                conn.close_after_write = connect_response.?.close_after_write;
+                const c_write = self.allocator.create(xev.Completion) catch |err| {
+                    std.log.err("Failed to create write completion: {}", .{err});
+                    conn.socket.close(loop, c, Connection, conn, closeCallback);
+                    return .disarm;
+                };
+                conn.socket.write(loop, c_write, .{ .slice = connect_response.?.data }, Connection, conn, writeCallback);
+            }
 
             // Start reading from this connection (reuse the completion)
             conn.socket.read(loop, c, .{ .slice = &conn.buffer }, Connection, conn, readCallback);
@@ -325,7 +430,9 @@ fn Server(comptime HandlerType: type) type {
                 else => {
                     std.log.err("Read error: {}", .{err});
                     conn.server.allocator.destroy(c);
-                    conn.destroy();
+                    conn.destroy() catch |destroy_err| {
+                        std.log.err("Error destroying connection: {}", .{destroy_err});
+                    };
                     return .disarm;
                 },
             };
@@ -440,7 +547,9 @@ fn Server(comptime HandlerType: type) type {
             result catch |err| {
                 std.log.err("Close error: {}", .{err});
                 conn.server.allocator.destroy(c);
-                conn.destroy();
+                conn.destroy() catch |destroy_err| {
+                    std.log.err("Error destroying connection: {}", .{destroy_err});
+                };
                 return .disarm;
             };
 
@@ -448,7 +557,9 @@ fn Server(comptime HandlerType: type) type {
 
             // Clean up the completion and connection
             conn.server.allocator.destroy(c);
-            conn.destroy();
+            conn.destroy() catch |err| {
+                std.log.err("Error destroying connection: {}", .{err});
+            };
             return .disarm;
         }
     };
