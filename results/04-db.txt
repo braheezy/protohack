@@ -1,0 +1,22 @@
+[Mon Nov 10 05:17:43 2025 UTC] [0simple.test] NOTE:check starts
+[Mon Nov 10 05:17:43 2025 UTC] [0simple.test] PASS
+[Mon Nov 10 05:17:44 2025 UTC] [1users.test] NOTE:check starts
+[Mon Nov 10 05:17:44 2025 UTC] [1users.test] NOTE:inserting 20 usernames and checking them
+[Mon Nov 10 05:17:47 2025 UTC] [1users.test] PASS
+[Mon Nov 10 05:17:49 2025 UTC] [2products.test] NOTE:check starts
+[Mon Nov 10 05:17:49 2025 UTC] [2products.test] NOTE:inserting 500 JSON product records
+[Mon Nov 10 05:17:59 2025 UTC] [2products.test] NOTE:checking 100 JSON product records selected at random
+[Mon Nov 10 05:18:04 2025 UTC] [2products.test] NOTE:no value for 'product.73491' (response packet dropped?)
+[Mon Nov 10 05:18:04 2025 UTC] [2products.test] NOTE:no value for 'product.73617' (response packet dropped?)
+[Mon Nov 10 05:18:04 2025 UTC] [2products.test] NOTE:no value for 'product.73513' (response packet dropped?)
+[Mon Nov 10 05:18:04 2025 UTC] [2products.test] NOTE:no value for 'product.73692' (response packet dropped?)
+[Mon Nov 10 05:18:04 2025 UTC] [2products.test] PASS
+[Mon Nov 10 05:18:05 2025 UTC] [3version.test] NOTE:check starts
+[Mon Nov 10 05:18:05 2025 UTC] [3version.test] NOTE:checking 'version' implementation
+[Mon Nov 10 05:18:05 2025 UTC] [3version.test] NOTE:got server version 'weirddb-0.1.0'
+[Mon Nov 10 05:18:05 2025 UTC] [3version.test] PASS
+[Mon Nov 10 05:18:06 2025 UTC] [4edgecases.test] NOTE:check starts
+[Mon Nov 10 05:18:06 2025 UTC] [4edgecases.test] NOTE:checking edge cases
+[Mon Nov 10 05:18:08 2025 UTC] [4edgecases.test] NOTE:inserting value for TinyFred95, and waiting for it to update
+[Mon Nov 10 05:18:08 2025 UTC] [4edgecases.test] NOTE:overwriting value for TinyFred95, and waiting for it to update
+[Mon Nov 10 05:18:09 2025 UTC] [4edgecases.test] PASS

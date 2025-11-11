@@ -1,8 +1,9 @@
 // ============================================================================
-// Generic TCP Server Framework
+// Generic TCP/UDP Server Framework
 // ============================================================================
-// This module provides a complete TCP server framework built on libxev.
-// To use it, just implement a Handler and call server.run(YourHandler).
+// This module provides a complete server framework built on libxev supporting
+// both TCP and UDP protocols. To use it, implement a Handler and call
+// server.run(YourHandler).
 
 const std = @import("std");
 const builtin = @import("builtin");
@@ -12,15 +13,15 @@ const xev = @import("xev");
 // Public API
 // ============================================================================
 
-/// Connection type for a given handler
+/// Connection type for a given handler (TCP only)
 pub fn ConnectionType(comptime HandlerType: type) type {
-    return Server(HandlerType).Connection;
+    return TCPServer(HandlerType).Connection;
 }
 
 /// Thread-local storage for current server instance
 threadlocal var current_server: ?*anyopaque = null;
 
-fn getCurrentServer(comptime HandlerType: type) ?*Server(HandlerType) {
+fn getCurrentServer(comptime HandlerType: type) ?*TCPServer(HandlerType) {
     const ptr = current_server orelse return null;
     return @ptrCast(@alignCast(ptr));
 }
@@ -43,14 +44,14 @@ pub fn writeToConnection(comptime HandlerType: type, conn: *ConnectionType(Handl
 }
 
 fn writeCompletionWrapper(comptime HandlerType: type) fn (
-    ?*Server(HandlerType).Connection,
+    ?*TCPServer(HandlerType).Connection,
     *xev.Loop,
     *xev.Completion,
     xev.TCP,
     xev.WriteBuffer,
     xev.WriteError!usize,
 ) xev.CallbackAction {
-    const Connection = Server(HandlerType).Connection;
+    const Connection = TCPServer(HandlerType).Connection;
     return struct {
         fn callback(
             _: ?*Connection,
@@ -80,8 +81,18 @@ fn writeCompletionWrapper(comptime HandlerType: type) fn (
     }.callback;
 }
 
-/// Run a TCP server with the given handler type
+/// Run a server with the given handler type (dispatches to TCP or UDP based on handler.protocol)
 pub fn run(allocator: std.mem.Allocator, comptime HandlerType: type) !void {
+    const protocol = Handler(HandlerType).protocol;
+
+    switch (protocol) {
+        .tcp => try runTCP(allocator, HandlerType),
+        .udp => try runUDP(allocator, HandlerType),
+    }
+}
+
+/// Run a TCP server with the given handler type
+fn runTCP(allocator: std.mem.Allocator, comptime HandlerType: type) !void {
     // Parse command line arguments
     const args = try parseArgs(allocator);
     defer allocator.free(args.host);
@@ -98,16 +109,46 @@ pub fn run(allocator: std.mem.Allocator, comptime HandlerType: type) !void {
     defer loop.deinit();
 
     // Create the server with the handler
-    var server = try Server(HandlerType).init(allocator, &loop, args.host, args.port);
+    var server = try TCPServer(HandlerType).init(allocator, &loop, args.host, args.port);
     defer server.deinit();
 
     // Set thread-local server reference for handler access
     current_server = @ptrCast(&server);
     defer current_server = null;
 
-    std.log.info("Server listening on {s}:{d}", .{ args.host, args.port });
+    std.log.info("TCP Server listening on {s}:{d}", .{ args.host, args.port });
 
     // Start accepting connections
+    try server.start();
+
+    // Run the loop until done
+    try loop.run(.until_done);
+}
+
+/// Run a UDP server with the given handler type
+fn runUDP(allocator: std.mem.Allocator, comptime HandlerType: type) !void {
+    // Parse command line arguments
+    const args = try parseArgs(allocator);
+    defer allocator.free(args.host);
+
+    // Initialize thread pool (required for kqueue on macOS)
+    var thread_pool = xev.ThreadPool.init(.{});
+    defer thread_pool.deinit();
+    defer thread_pool.shutdown();
+
+    // Initialize the event loop with the thread pool
+    var loop = try xev.Loop.init(.{
+        .thread_pool = &thread_pool,
+    });
+    defer loop.deinit();
+
+    // Create the server with the handler
+    var server = try UDPServer(HandlerType).init(allocator, &loop, args.host, args.port);
+    defer server.deinit();
+
+    std.log.info("UDP Server listening on {s}:{d}", .{ args.host, args.port });
+
+    // Start receiving datagrams
     try server.start();
 
     // Run the loop until done
@@ -118,7 +159,13 @@ pub fn run(allocator: std.mem.Allocator, comptime HandlerType: type) !void {
 // Handler Interface
 // ============================================================================
 
-/// Protocol mode for message framing
+/// Network protocol type
+pub const Protocol = enum {
+    tcp,
+    udp,
+};
+
+/// Protocol mode for message framing (TCP only)
 pub const ProtocolMode = union(enum) {
     /// Line-based protocol (messages delimited by \n)
     line_based,
@@ -135,31 +182,61 @@ pub const HandlerResponse = struct {
 /// Handler interface that protocol implementations must provide
 pub fn Handler(comptime Self: type) type {
     return struct {
-        /// Protocol mode - defaults to line_based if not specified
+        /// Protocol type - defaults to TCP if not specified
+        pub const protocol: Protocol =
+            if (@hasDecl(Self, "protocol")) Self.protocol else .tcp;
+
+        /// Protocol mode - defaults to line_based if not specified (TCP only)
         pub const protocol_mode: ProtocolMode =
             if (@hasDecl(Self, "protocol_mode")) Self.protocol_mode else .line_based;
 
-        /// Called when a new connection is established
+        // ====================================================================
+        // TCP Handler Interface
+        // ====================================================================
+
+        /// Called when a new connection is established (TCP only)
         /// Return HandlerResponse to accept and optionally send initial data
         /// Return null to reject the connection
         pub const onConnect: fn (self: *Self, allocator: std.mem.Allocator) ?HandlerResponse =
             if (@hasDecl(Self, "onConnect")) Self.onConnect else defaultOnConnect;
 
-        /// Called when data is received
+        /// Called when data is received (TCP only)
         /// Should return the response to send back
         /// Set close_after_write=true to disconnect after sending the response
         /// Return error to close the connection immediately without sending a response
-        pub const onData: fn (self: *Self, allocator: std.mem.Allocator, data: []const u8) anyerror!HandlerResponse = Self.onData;
+        pub const onData: fn (self: *Self, allocator: std.mem.Allocator, data: []const u8) anyerror!HandlerResponse =
+            if (@hasDecl(Self, "onData")) Self.onData else defaultOnData;
 
-        /// Called when the connection is being closed
+        /// Called when the connection is being closed (TCP only)
         pub const onClose: fn (self: *Self) anyerror!void =
             if (@hasDecl(Self, "onClose")) Self.onClose else defaultOnClose;
+
+        // ====================================================================
+        // UDP Handler Interface
+        // ====================================================================
+
+        /// Called when a datagram is received (UDP only)
+        /// Should return the response to send back to source address, or null for no response
+        pub const onDatagram: fn (self: *Self, allocator: std.mem.Allocator, data: []const u8, source: std.net.Address) anyerror!?[]const u8 =
+            if (@hasDecl(Self, "onDatagram")) Self.onDatagram else defaultOnDatagram;
+
+        // ====================================================================
+        // Default implementations
+        // ====================================================================
 
         fn defaultOnConnect(_: *Self, _: std.mem.Allocator) ?HandlerResponse {
             return .{};
         }
 
+        fn defaultOnData(_: *Self, _: std.mem.Allocator, _: []const u8) !HandlerResponse {
+            return .{};
+        }
+
         fn defaultOnClose(_: *Self) !void {}
+
+        fn defaultOnDatagram(_: *Self, _: std.mem.Allocator, _: []const u8, _: std.net.Address) !?[]const u8 {
+            return null;
+        }
     };
 }
 
@@ -221,7 +298,7 @@ fn parseArgs(allocator: std.mem.Allocator) !Args {
 }
 
 /// Generic TCP server that works with any Handler
-fn Server(comptime HandlerType: type) type {
+fn TCPServer(comptime HandlerType: type) type {
     return struct {
         const Self = @This();
 
@@ -520,7 +597,7 @@ fn Server(comptime HandlerType: type) type {
                 return .disarm;
             };
 
-            std.log.debug("Wrote {} bytes", .{bytes_written});
+            std.log.info("Wrote {} bytes", .{bytes_written});
 
             // Check if we should close after writing
             if (conn.close_after_write) {
@@ -560,6 +637,167 @@ fn Server(comptime HandlerType: type) type {
             conn.destroy() catch |err| {
                 std.log.err("Error destroying connection: {}", .{err});
             };
+            return .disarm;
+        }
+    };
+}
+
+// ============================================================================
+// UDP Server Implementation
+// ============================================================================
+
+/// Generic UDP server that works with any Handler
+fn UDPServer(comptime HandlerType: type) type {
+    return struct {
+        const Self = @This();
+
+        allocator: std.mem.Allocator,
+        loop: *xev.Loop,
+        socket: xev.UDP,
+        handler: HandlerType,
+        state: xev.UDP.State,
+        buffer: [65536]u8, // Max UDP packet size
+
+        pub fn init(allocator: std.mem.Allocator, loop: *xev.Loop, host: []const u8, port: u16) !Self {
+            // Parse the address - try IPv4 first, then IPv6
+            const addr = std.net.Address.parseIp4(host, port) catch
+                std.net.Address.parseIp6(host, port) catch {
+                std.log.err("Invalid host address: {s}", .{host});
+                return error.InvalidAddress;
+            };
+
+            // Create a UDP socket
+            var socket = try xev.UDP.init(addr);
+
+            // Bind to the address
+            try socket.bind(addr);
+
+            var result: Self = undefined;
+            result.allocator = allocator;
+            result.loop = loop;
+            result.socket = socket;
+            result.handler = .{};
+            result.state = undefined;
+            result.buffer = undefined;
+            return result;
+        }
+
+        pub fn deinit(self: *Self) void {
+            _ = self;
+            // Cleanup is handled by loop.deinit()
+        }
+
+        /// Start receiving datagrams
+        pub fn start(self: *Self) !void {
+            const c = try self.allocator.create(xev.Completion);
+            self.socket.read(self.loop, c, &self.state, .{ .slice = &self.buffer }, Self, self, readCallback);
+        }
+
+        /// Called when a datagram is received
+        fn readCallback(
+            self_: ?*Self,
+            loop: *xev.Loop,
+            _: *xev.Completion,
+            _: *xev.UDP.State,
+            source_addr: std.net.Address,
+            _: xev.UDP,
+            buffer: xev.ReadBuffer,
+            result: xev.ReadError!usize,
+        ) xev.CallbackAction {
+            const self = self_.?;
+
+            const bytes_read = result catch |err| {
+                // For UDP, EOF on read might indicate a 0-byte datagram on some platforms
+                // Treat it as a successful 0-byte read
+                if (err == error.EOF) {
+                    std.log.debug("EOF on UDP read - treating as 0-byte datagram", .{});
+                    // Process as empty datagram
+                    const empty_data: []const u8 = &[_]u8{};
+                    const empty_response = Handler(HandlerType).onDatagram(&self.handler, self.allocator, empty_data, source_addr) catch |handler_err| {
+                        std.log.err("Handler error on empty datagram: {}", .{handler_err});
+                        return .rearm;
+                    };
+
+                    if (empty_response) |response_data| {
+                        if (response_data.len > 0) {
+                            const c_write = self.allocator.create(xev.Completion) catch {
+                                return .rearm;
+                            };
+                            const write_state = self.allocator.create(xev.UDP.State) catch {
+                                self.allocator.destroy(c_write);
+                                return .rearm;
+                            };
+                            self.socket.write(loop, c_write, write_state, source_addr, .{ .slice = response_data }, Self, self, writeCallback);
+                        }
+                    }
+                    return .rearm;
+                }
+
+                std.log.err("Read error: {}", .{err});
+                // UDP is connectionless - continue listening even on errors
+                return .rearm;
+            };
+
+            // Extract the data (empty datagrams are valid in UDP)
+            const data = buffer.slice[0..bytes_read];
+
+            // Process through the handler
+            const response = Handler(HandlerType).onDatagram(&self.handler, self.allocator, data, source_addr) catch |err| {
+                std.log.err("Handler error: {}", .{err});
+                // Continue listening even on error
+                return .rearm;
+            };
+
+            // If there's a response, send it back
+            if (response) |response_data| {
+                std.log.info("Handler returned response: len={d}", .{response_data.len});
+                if (response_data.len > 0) {
+                    const c_write = self.allocator.create(xev.Completion) catch |err| {
+                        std.log.err("Failed to create write completion: {}", .{err});
+                        return .rearm;
+                    };
+                    const write_state = self.allocator.create(xev.UDP.State) catch |err| {
+                        std.log.err("Failed to create write state: {}", .{err});
+                        self.allocator.destroy(c_write);
+                        return .rearm;
+                    };
+                    std.log.info("Queueing write of {} bytes", .{response_data.len});
+                    self.socket.write(loop, c_write, write_state, source_addr, .{ .slice = response_data }, Self, self, writeCallback);
+                } else {
+                    std.log.info("Response is empty, not sending", .{});
+                }
+            } else {
+                std.log.info("Handler returned null (no response)", .{});
+            }
+
+            // Continue listening (rearm)
+            return .rearm;
+        }
+
+        /// Called when a datagram is written
+        fn writeCallback(
+            self_: ?*Self,
+            _: *xev.Loop,
+            c: *xev.Completion,
+            state: *xev.UDP.State,
+            _: xev.UDP,
+            _: xev.WriteBuffer,
+            result: xev.WriteError!usize,
+        ) xev.CallbackAction {
+            const self = self_.?;
+
+            const bytes_written = result catch |err| {
+                std.log.err("Write error: {}", .{err});
+                self.allocator.destroy(state);
+                self.allocator.destroy(c);
+                return .disarm;
+            };
+
+            std.log.info("Wrote {} bytes", .{bytes_written});
+
+            // Clean up
+            self.allocator.destroy(state);
+            self.allocator.destroy(c);
             return .disarm;
         }
     };

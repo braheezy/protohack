@@ -22,6 +22,7 @@ pub fn build(b: *std.Build) void {
     addServer(b, "prime", 3001, target, optimize);
     addServer(b, "prices", 3002, target, optimize);
     addServer(b, "chat", 3003, target, optimize);
+    addServer(b, "wdb", 3004, target, optimize);
 }
 
 // ============================================================================
