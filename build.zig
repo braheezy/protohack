@@ -18,11 +18,12 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     // Add servers here - each call creates all build steps
-    addServer(b, "smoke", 3000, target, optimize);
-    addServer(b, "prime", 3001, target, optimize);
-    addServer(b, "prices", 3002, target, optimize);
-    addServer(b, "chat", 3003, target, optimize);
-    addServer(b, "wdb", 3004, target, optimize);
+    addServer(b, "smoke", 3000, target, optimize, true);
+    addServer(b, "prime", 3001, target, optimize, true);
+    addServer(b, "prices", 3002, target, optimize, true);
+    addServer(b, "chat", 3003, target, optimize, true);
+    addServer(b, "wdb", 3004, target, optimize, true);
+    addServer(b, "bogus", 3005, target, optimize, false);
 }
 
 // ============================================================================
@@ -32,6 +33,7 @@ pub fn build(b: *std.Build) void {
 const ServerConfig = struct {
     name: []const u8,
     port: u16,
+    use_framework: bool,
 };
 
 /// Add all build steps for a server
@@ -41,8 +43,9 @@ fn addServer(
     port: u16,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
+    use_framework: bool,
 ) void {
-    const config = ServerConfig{ .name = name, .port = port };
+    const config = ServerConfig{ .name = name, .port = port, .use_framework = use_framework };
 
     // Allocate stable strings for step names
     const step_linux = std.fmt.allocPrint(b.allocator, "{s}-linux", .{name}) catch @panic("OOM");
@@ -53,18 +56,22 @@ fn addServer(
     const step_logs = std.fmt.allocPrint(b.allocator, "{s}-logs", .{name}) catch @panic("OOM");
 
     // Create the server framework module (shared by all servers)
-    const server_module = b.createModule(.{
-        .root_source_file = b.path("src/root.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
+    const server_module = if (config.use_framework)
+        b.createModule(.{
+            .root_source_file = b.path("src/root.zig"),
+            .target = target,
+            .optimize = optimize,
+        })
+    else
+        null;
 
-    // Add xev dependency
-    const xev_dep = b.dependency("libxev", .{
-        .target = target,
-        .optimize = optimize,
-    });
-    server_module.addImport("xev", xev_dep.module("xev"));
+    if (config.use_framework) {
+        const xev_dep = b.dependency("libxev", .{
+            .target = target,
+            .optimize = optimize,
+        });
+        server_module.?.addImport("xev", xev_dep.module("xev"));
+    }
 
     // ========================================================================
     // Local build and run
@@ -77,13 +84,15 @@ fn addServer(
             .optimize = optimize,
         }),
     });
-    exe.root_module.addImport("server", server_module);
+    if (config.use_framework) {
+        exe.root_module.addImport("server", server_module.?);
+    }
 
     b.installArtifact(exe);
 
     const run_step = b.step(config.name, b.fmt("Build and run {s} server locally", .{config.name}));
     const run_cmd = b.addRunArtifact(exe);
-    run_cmd.step.dependOn(b.getInstallStep());
+    run_cmd.step.dependOn(&exe.step);
     // Add default port argument
     run_cmd.addArgs(&[_][]const u8{ "-p", b.fmt("{d}", .{config.port}) });
     // Add any additional user-provided arguments
@@ -101,17 +110,22 @@ fn addServer(
         .abi = .gnu,
     });
 
-    const server_module_linux = b.createModule(.{
-        .root_source_file = b.path("src/root.zig"),
-        .target = linux_target,
-        .optimize = .ReleaseFast,
-    });
+    const server_module_linux = if (config.use_framework)
+        b.createModule(.{
+            .root_source_file = b.path("src/root.zig"),
+            .target = linux_target,
+            .optimize = .ReleaseFast,
+        })
+    else
+        null;
 
-    const xev_linux = b.dependency("libxev", .{
-        .target = linux_target,
-        .optimize = .ReleaseFast,
-    });
-    server_module_linux.addImport("xev", xev_linux.module("xev"));
+    if (config.use_framework) {
+        const xev_linux = b.dependency("libxev", .{
+            .target = linux_target,
+            .optimize = .ReleaseFast,
+        });
+        server_module_linux.?.addImport("xev", xev_linux.module("xev"));
+    }
 
     const linux_exe = b.addExecutable(.{
         .name = config.name,
@@ -121,7 +135,9 @@ fn addServer(
             .optimize = .ReleaseFast,
         }),
     });
-    linux_exe.root_module.addImport("server", server_module_linux);
+    if (config.use_framework) {
+        linux_exe.root_module.addImport("server", server_module_linux.?);
+    }
 
     const install_linux = b.addInstallArtifact(linux_exe, .{
         .dest_dir = .{ .override = .{ .custom = b.fmt("linux/{s}", .{config.name}) } },

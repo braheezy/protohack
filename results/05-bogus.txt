@@ -1,0 +1,55 @@
+[Sun Nov 16 01:45:45 2025 UTC] [0simple.test] NOTE:check starts
+[Sun Nov 16 01:45:46 2025 UTC] [0simple.test] NOTE:checking whether basic chat works
+[Sun Nov 16 01:45:47 2025 UTC] [0simple.test] NOTE:PoorHacker436 connected to 34.204.18.159 port 3005
+[Sun Nov 16 01:45:48 2025 UTC] [0simple.test] NOTE:SmallHunter68 connected to 34.204.18.159 port 3005
+[Sun Nov 16 01:45:48 2025 UTC] [0simple.test] NOTE:PoorHacker436 joined the chat room
+[Sun Nov 16 01:45:48 2025 UTC] [0simple.test] NOTE:SmallHunter68 joined the chat room
+[Sun Nov 16 01:45:54 2025 UTC] [0simple.test] PASS
+[Sun Nov 16 01:45:55 2025 UTC] [1payment.test] NOTE:check starts
+[Sun Nov 16 01:45:56 2025 UTC] [1payment.test] NOTE:checking whether address rewriting works
+[Sun Nov 16 01:45:57 2025 UTC] [1payment.test] NOTE:ProtoCoder239 connected to 34.204.18.159 port 3005
+[Sun Nov 16 01:45:57 2025 UTC] [1payment.test] NOTE:RichCaster134 connected to 34.204.18.159 port 3005
+[Sun Nov 16 01:45:58 2025 UTC] [1payment.test] NOTE:ProtoCoder239 joined the chat room
+[Sun Nov 16 01:45:58 2025 UTC] [1payment.test] NOTE:RichCaster134 joined the chat room
+[Sun Nov 16 01:46:04 2025 UTC] [1payment.test] PASS
+[Sun Nov 16 01:46:05 2025 UTC] [2conference.test] NOTE:check starts
+[Sun Nov 16 01:46:05 2025 UTC] [2conference.test] NOTE:checking address rewriting in both directions
+[Sun Nov 16 01:46:07 2025 UTC] [2conference.test] NOTE:SaneAlice921 connected to 34.204.18.159 port 3005
+[Sun Nov 16 01:46:07 2025 UTC] [2conference.test] NOTE:GreenEdward921 connected to 34.204.18.159 port 3005
+[Sun Nov 16 01:46:08 2025 UTC] [2conference.test] NOTE:LargeFred161 connected to 34.204.18.159 port 3005
+[Sun Nov 16 01:46:08 2025 UTC] [2conference.test] NOTE:BlueCaster302 connected to 34.204.18.159 port 3005
+[Sun Nov 16 01:46:08 2025 UTC] [2conference.test] NOTE:RichMike466 connected to 34.204.18.159 port 3005
+[Sun Nov 16 01:46:08 2025 UTC] [2conference.test] NOTE:SlimyWizard477 connected to 34.204.18.159 port 3005
+[Sun Nov 16 01:46:09 2025 UTC] [2conference.test] NOTE:SaneCoder158 connected to 34.204.18.159 port 3005
+[Sun Nov 16 01:46:09 2025 UTC] [2conference.test] NOTE:PoorBob530 connected to 34.204.18.159 port 3005
+[Sun Nov 16 01:46:09 2025 UTC] [2conference.test] NOTE:SaneAlice921 joined the chat room
+[Sun Nov 16 01:46:10 2025 UTC] [2conference.test] NOTE:GreenEdward921 joined the chat room
+[Sun Nov 16 01:46:10 2025 UTC] [2conference.test] NOTE:LargeFred161 joined the chat room
+[Sun Nov 16 01:46:10 2025 UTC] [2conference.test] NOTE:LargeDev407 joined the chat room
+[Sun Nov 16 01:46:10 2025 UTC] [2conference.test] NOTE:BlueCaster302 joined the chat room
+[Sun Nov 16 01:46:10 2025 UTC] [2conference.test] NOTE:RichMike466 joined the chat room
+[Sun Nov 16 01:46:10 2025 UTC] [2conference.test] NOTE:SlimyWizard477 joined the chat room
+[Sun Nov 16 01:46:11 2025 UTC] [2conference.test] NOTE:SaneCoder158 joined the chat room
+[Sun Nov 16 01:46:11 2025 UTC] [2conference.test] NOTE:PoorBob530 joined the chat room
+[Sun Nov 16 01:46:15 2025 UTC] [2conference.test] NOTE:Tony7290875 joined the chat room
+[Sun Nov 16 01:46:15 2025 UTC] [2conference.test] NOTE:Tony7290875 (fully joined) disconnected
+[Sun Nov 16 01:46:15 2025 UTC] [2conference.test] NOTE:SaneAlice921 (fully joined) disconnected
+[Sun Nov 16 01:46:19 2025 UTC] [2conference.test] PASS
+[Sun Nov 16 01:46:20 2025 UTC] [3trickle.test] NOTE:check starts
+[Sun Nov 16 01:46:20 2025 UTC] [3trickle.test] NOTE:checking messages sent 1 character at a time
+[Sun Nov 16 01:46:21 2025 UTC] [3trickle.test] NOTE:GreenCaster991 connected to 34.204.18.159 port 3005
+[Sun Nov 16 01:46:22 2025 UTC] [3trickle.test] NOTE:RedAlice244 connected to 34.204.18.159 port 3005
+[Sun Nov 16 01:46:22 2025 UTC] [3trickle.test] NOTE:GreenCaster991 joined the chat room
+[Sun Nov 16 01:46:22 2025 UTC] [3trickle.test] NOTE:RedAlice244 joined the chat room
+[Sun Nov 16 01:46:38 2025 UTC] [3trickle.test] PASS
+[Sun Nov 16 01:46:39 2025 UTC] [4notbogus.test] NOTE:check starts
+[Sun Nov 16 01:46:39 2025 UTC] [4notbogus.test] NOTE:checking non-replacement of non-boguscoin addresses
+[Sun Nov 16 01:46:40 2025 UTC] [4notbogus.test] NOTE:BrownBob577 connected to 34.204.18.159 port 3005
+[Sun Nov 16 01:46:41 2025 UTC] [4notbogus.test] NOTE:LargeHacker5 connected to 34.204.18.159 port 3005
+[Sun Nov 16 01:46:41 2025 UTC] [4notbogus.test] NOTE:BrownBob577 joined the chat room
+[Sun Nov 16 01:46:41 2025 UTC] [4notbogus.test] NOTE:LargeHacker5 joined the chat room
+[Sun Nov 16 01:46:45 2025 UTC] [4notbogus.test] PASS
+[Sun Nov 16 01:46:46 2025 UTC] [5badname.test] NOTE:check starts
+[Sun Nov 16 01:46:47 2025 UTC] [5badname.test] NOTE:checking a user who quits without sending newline after name
+[Sun Nov 16 01:46:48 2025 UTC] [5badname.test] NOTE:SaneSmith978 connected to 34.204.18.159 port 3005
+[Sun Nov 16 01:46:51 2025 UTC] [5badname.test] PASS
