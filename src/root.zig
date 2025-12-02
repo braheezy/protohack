@@ -177,6 +177,7 @@ pub const ProtocolMode = union(enum) {
 pub const HandlerResponse = struct {
     data: []const u8 = "",
     close_after_write: bool = false,
+    heartbeat_interval_ms: ?u64 = null,
 };
 
 /// Handler interface that protocol implementations must provide
@@ -311,6 +312,13 @@ fn TCPServer(comptime HandlerType: type) type {
             server: *Self,
             handler: HandlerType,
             close_after_write: bool = false,
+            heartbeat_interval_ms: u64 = 0,
+            heartbeat_timer: ?xev.Timer = null,
+            heartbeat_completion: ?*xev.Completion = null,
+            destroy_pending: bool = false,
+            destroyed: bool = false,
+            active_heartbeat_callbacks: usize = 0,
+            heartbeat_pending: bool = false,
 
             fn create(allocator: std.mem.Allocator, socket: xev.TCP, server: *Self) !*Connection {
                 const conn = try allocator.create(Connection);
@@ -322,6 +330,13 @@ fn TCPServer(comptime HandlerType: type) type {
                 conn.server = server;
                 conn.handler = .{};
                 conn.close_after_write = false;
+                conn.heartbeat_interval_ms = 0;
+                conn.heartbeat_timer = null;
+                conn.heartbeat_completion = null;
+                conn.destroy_pending = false;
+                conn.destroyed = false;
+                conn.active_heartbeat_callbacks = 0;
+                conn.heartbeat_pending = false;
                 // Register connection
                 server.connections.append(server.allocator, conn) catch |err| {
                     allocator.free(line_buf);
@@ -331,8 +346,21 @@ fn TCPServer(comptime HandlerType: type) type {
                 return conn;
             }
 
-            fn destroy(self: *Connection) !void {
+            fn finishDestroy(self: *Connection) !void {
+                if (self.destroyed) return;
+                self.destroyed = true;
+                self.destroy_pending = false;
+                self.heartbeat_pending = false;
                 try Handler(HandlerType).onClose(&self.handler);
+                self.stopHeartbeat();
+                if (self.heartbeat_timer) |*timer| {
+                    timer.deinit();
+                    self.heartbeat_timer = null;
+                }
+                if (self.heartbeat_completion) |c| {
+                    self.server.allocator.destroy(c);
+                    self.heartbeat_completion = null;
+                }
                 // Unregister connection
                 for (self.server.connections.items, 0..) |conn, i| {
                     if (conn == self) {
@@ -342,6 +370,104 @@ fn TCPServer(comptime HandlerType: type) type {
                 }
                 self.server.allocator.free(self.line_buffer);
                 self.server.allocator.destroy(self);
+            }
+
+            fn tryFinishDestroy(self: *Connection) !void {
+                if (!self.destroy_pending) return;
+                if (self.active_heartbeat_callbacks != 0) return;
+                if (self.heartbeat_pending) return;
+                try self.finishDestroy();
+            }
+
+            fn requestDestroy(self: *Connection) !void {
+                if (self.destroyed or self.destroy_pending) return;
+                self.destroy_pending = true;
+                try self.tryFinishDestroy();
+            }
+
+            fn startHeartbeat(self: *Connection, loop: *xev.Loop, interval_ms: u64) !void {
+                if (interval_ms == 0) {
+                    self.heartbeat_interval_ms = 0;
+                    return;
+                }
+
+                self.heartbeat_interval_ms = interval_ms;
+
+                if (self.heartbeat_timer == null) {
+                    self.heartbeat_timer = try xev.Timer.init();
+                }
+
+                if (self.heartbeat_completion == null) {
+                    self.heartbeat_completion = try self.server.allocator.create(xev.Completion);
+                }
+
+                self.scheduleHeartbeat(loop, self.heartbeat_completion.?);
+            }
+
+            fn stopHeartbeat(self: *Connection) void {
+                self.heartbeat_interval_ms = 0;
+            }
+
+            fn scheduleHeartbeat(self: *Connection, loop: *xev.Loop, c: *xev.Completion) void {
+                self.heartbeat_pending = true;
+                self.heartbeat_timer.?.run(
+                    loop,
+                    c,
+                    self.heartbeat_interval_ms,
+                    Connection,
+                    self,
+                    heartbeatCallback,
+                );
+            }
+
+            fn heartbeatCallback(
+                conn_: ?*Connection,
+                loop: *xev.Loop,
+                c: *xev.Completion,
+                result: xev.Timer.RunError!void,
+            ) xev.CallbackAction {
+                const conn = conn_ orelse return .disarm;
+
+                conn.heartbeat_pending = false;
+
+                _ = result catch {
+                    return .disarm;
+                };
+
+                conn.active_heartbeat_callbacks += 1;
+                defer {
+                    conn.active_heartbeat_callbacks -= 1;
+                    if (conn.destroy_pending) {
+                        conn.tryFinishDestroy() catch |err| {
+                            std.log.err("Error destroying connection: {}", .{err});
+                        };
+                    }
+                }
+
+                if (conn.destroy_pending) {
+                    return .disarm;
+                }
+
+                std.log.debug("Heartbeat callback (interval={d})", .{conn.heartbeat_interval_ms});
+
+                if (@hasDecl(HandlerType, "onHeartbeat")) {
+                    const heartbeat_data = HandlerType.onHeartbeat(&conn.handler, conn.server.allocator) catch {
+                        return .disarm;
+                    };
+                    if (heartbeat_data.len > 0) {
+                        const heartbeat_write = conn.server.allocator.create(xev.Completion) catch |err| {
+                            std.log.err("Failed to create heartbeat completion: {}", .{err});
+                            return .disarm;
+                        };
+                        conn.socket.write(loop, heartbeat_write, .{ .slice = heartbeat_data }, Connection, conn, writeCallback);
+                    }
+                }
+
+                if (conn.heartbeat_interval_ms > 0 and !conn.close_after_write and !conn.destroy_pending) {
+                    conn.scheduleHeartbeat(loop, c);
+                }
+
+                return .disarm;
             }
 
             /// Process a single message through the handler
@@ -362,6 +488,13 @@ fn TCPServer(comptime HandlerType: type) type {
 
                 // Store whether to close after write
                 self.close_after_write = handler_response.close_after_write;
+
+                if (handler_response.heartbeat_interval_ms) |interval| {
+                    std.log.info("Starting heartbeat timer: {}ms", .{interval});
+                    self.startHeartbeat(loop, interval) catch |err| {
+                        std.log.err("Failed to start heartbeat: {}", .{err});
+                    };
+                }
 
                 // If there's a response, write it back
                 if (handler_response.data.len > 0) {
@@ -454,7 +587,7 @@ fn TCPServer(comptime HandlerType: type) type {
             const connect_response = Handler(HandlerType).onConnect(&conn.handler, self.allocator);
             if (connect_response == null) {
                 std.log.info("Connection rejected by handler", .{});
-                conn.destroy() catch |err| {
+                conn.requestDestroy() catch |err| {
                     std.log.err("Error destroying connection: {}", .{err});
                 };
                 self.allocator.destroy(c);
@@ -507,7 +640,7 @@ fn TCPServer(comptime HandlerType: type) type {
                 else => {
                     std.log.err("Read error: {}", .{err});
                     conn.server.allocator.destroy(c);
-                    conn.destroy() catch |destroy_err| {
+                    conn.requestDestroy() catch |destroy_err| {
                         std.log.err("Error destroying connection: {}", .{destroy_err});
                     };
                     return .disarm;
@@ -624,7 +757,7 @@ fn TCPServer(comptime HandlerType: type) type {
             result catch |err| {
                 std.log.err("Close error: {}", .{err});
                 conn.server.allocator.destroy(c);
-                conn.destroy() catch |destroy_err| {
+                conn.requestDestroy() catch |destroy_err| {
                     std.log.err("Error destroying connection: {}", .{destroy_err});
                 };
                 return .disarm;
@@ -634,7 +767,7 @@ fn TCPServer(comptime HandlerType: type) type {
 
             // Clean up the completion and connection
             conn.server.allocator.destroy(c);
-            conn.destroy() catch |err| {
+            conn.requestDestroy() catch |err| {
                 std.log.err("Error destroying connection: {}", .{err});
             };
             return .disarm;
